@@ -145,15 +145,15 @@ void worker(void *p) {
 
 **Step 4:** Because Task L still holds `shared_mutex`, Task H cannot acquire it. The scheduler places Task H into the Blocked state, waiting for the mutex to clear.
 
-**Step 5:** With Task H blocked, the scheduler looks for the next highest priority ready task. Task L resumes execution to finish its critical section.
+**Step 5:** With Task H blocked, Task L becomes the highest-priority ready task and resumes executing its critical section.
 
 **Step 6:** While Task L is executing inside the critical section, an asynchronous network event wakes up Task M (Priority 10).
 
 **Step 7:** Because Task M's priority (10) is higher than Task L's priority (5), the scheduler immediately preempts Task L and hands execution control to Task M.
 
-**Step 8:** Task M begins executing its long-running communication relay loop.
+**Step 8:** Task M continues executing while Task L remains preempted.
 
-**The Inversion:** Because Task M does not share a mutex with anyone, it can run indefinitely, preventing Task L from finishing and releasing `shared_mutex`. Consequently, the highest-priority task (Task H) is indirectly blocked by a medium-priority task (Task M). This is a classic unbounded priority inversion.
+**The Inversion:** Because Task M does not require the shared mutex, it can continue executing while Task L is unable to finish its critical section and release the mutex. Consequently, Task H remains blocked by a medium-priority task, creating a classic unbounded priority inversion.
 
 ### Worst-Case Wait for Task H (With Priority Inheritance Enabled)
 When priority inheritance is enabled, the worst-case wait for Task H transitions from unbounded to bounded.
@@ -164,13 +164,13 @@ Because Task L now runs at Priority 15, Task M (Priority 10) can no longer preem
 
 With priority inheritance enabled, the worst-case wait for Task H is bounded by the remaining execution time of Task L's critical section plus the small scheduling overhead required to switch tasks.
 
-Worst-Case Wait = T_L_crit + T_ctx
+Worst-Case Wait = T<sub>L_crit</sub> + T<sub>ctx</sub>
 
 Where:
 
-T_L_crit = Maximum remaining execution time of Task L's critical section while it owns the mutex.
+T<sub>L_crit</sub> = Maximum remaining execution time of Task L's critical section while it owns the mutex.
 
-T_ctx = FreeRTOS context-switch and scheduling overhead.
+T<sub>ctx</sub> = FreeRTOS context-switch and scheduling overhead.
 
 Priority inheritance ensures that medium-priority tasks, such as Task M, cannot further delay Task H. As a result, Task H only waits for the mutex-owning task to complete its critical section, making the blocking time predictable and bounded.
 
@@ -179,7 +179,7 @@ Priority inheritance ensures that medium-priority tasks, such as Task M, cannot 
 ## Part D – Industry anchor
 Priority-inheritance bugs are typically caught before deployment through a combination of static analysis, runtime tracing, and code reviews. Static analysis tools such as Coverity and Klocwork examine source code without executing it and can identify issues such as incorrect mutex usage, missing lock releases, and unsafe synchronization patterns. Runtime tracing tools like Percepio Tracealyzer allow developers to visualize task scheduling, mutex ownership, and blocking events on the target system. By examining execution traces, engineers can quickly identify cases where a high-priority task is blocked while a lower-priority task holds a mutex or where a medium-priority task causes priority inversion. Code reviews also play an important role by verifying that mutexes are used correctly, critical sections remain short, and every lock has a corresponding release. For safety-critical embedded systems, formal verification tools such as TLA+, SPIN, or UPPAAL can model concurrent task behavior and verify properties such as deadlock freedom and bounded blocking before the software is deployed.
 
-### Citations
+### References
 https://www.blackduck.com/static-analysis-tools-sast/coverity.html
 
 https://www.perforce.com/products/klocwork
